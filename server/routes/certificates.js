@@ -56,4 +56,16 @@ router.get('/placeholder.pdf', (req, res) => {
   res.send('This is a placeholder for a certificate PDF');
 });
 
+// GET /api/certificates - get user's certificates
+router.get('/', auth, async (req, res) => {
+  try {
+    const certificates = await Certificate.find({ user: req.user._id })
+      .populate('event', 'title date venue')
+      .sort({ generatedAt: -1 });
+    res.json(certificates);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching certificates' });
+  }
+});
+
 module.exports = router;

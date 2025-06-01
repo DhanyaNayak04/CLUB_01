@@ -67,6 +67,17 @@ const eventSchema = new mongoose.Schema({
   registrationDeadline: {
     type: Date,
     required: false // Optional, but recommended to set
+  },
+  registrationClosed: {
+    type: Boolean,
+    default: false
+  },
+  registrationClosedAt: {
+    type: Date
+  },
+  registrationClosedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, { 
   timestamps: true,

@@ -46,15 +46,38 @@ function ClubDashboard() {
   useEffect(() => {
     const fetchRegistrationStatus = async () => {
       if (user && user.role === 'student' && events.length > 0) {
+        console.log('Fetching registration status for', events.length, 'events'); // Debug log
         const statusObj = {};
         for (const event of events) {
           try {
             const res = await api.get(`/api/events/${event._id}/registration-status`);
-            statusObj[event._id] = res.data.isRegistered;
-          } catch {
-            statusObj[event._id] = false;
+            console.log(`Registration status for event ${event.title}:`, res.data); // Debug log
+            statusObj[event._id] = {
+              isRegistered: res.data.isRegistered || false,
+              canRegister: res.data.canRegister !== undefined ? res.data.canRegister : true, // Default to true if not specified
+              registrationClosed: res.data.registrationClosed || false,
+              attendanceCompleted: res.data.attendanceCompleted || false,
+              eventPassed: res.data.eventPassed || false,
+              eventDate: res.data.eventDate || event.date
+            };
+          } catch (error) {
+            console.error(`Error fetching registration status for event ${event.title}:`, error);
+            // For events where we can't get status, allow registration if event hasn't passed
+            const eventDate = new Date(event.date);
+            const now = new Date();
+            const eventPassed = eventDate < now;
+            
+            statusObj[event._id] = {
+              isRegistered: false,
+              canRegister: !eventPassed, // Allow registration if event hasn't passed
+              registrationClosed: false,
+              attendanceCompleted: false,
+              eventPassed: eventPassed,
+              eventDate: event.date
+            };
           }
         }
+        console.log('Final registration status object:', statusObj); // Debug log
         setRegistrationStatus(statusObj);
       }
     };
@@ -63,13 +86,32 @@ function ClubDashboard() {
 
   // Register handler
   const handleRegister = async (eventId) => {
-    setRegistrationStatus(prev => ({ ...prev, [eventId]: 'loading' }));
+    setRegistrationStatus(prev => ({ 
+      ...prev, 
+      [eventId]: { 
+        ...prev[eventId], 
+        isRegistered: 'loading' 
+      } 
+    }));
     try {
       await api.post(`/api/events/${eventId}/register`);
-      setRegistrationStatus(prev => ({ ...prev, [eventId]: true }));
+      setRegistrationStatus(prev => ({ 
+        ...prev, 
+        [eventId]: { 
+          ...prev[eventId], 
+          isRegistered: true,
+          canRegister: false 
+        } 
+      }));
       alert('Registered successfully!');
     } catch (err) {
-      setRegistrationStatus(prev => ({ ...prev, [eventId]: false }));
+      setRegistrationStatus(prev => ({ 
+        ...prev, 
+        [eventId]: { 
+          ...prev[eventId], 
+          isRegistered: false 
+        } 
+      }));
       alert(err.response?.data?.message || 'Failed to register for event');
     }
   };
@@ -206,37 +248,78 @@ function ClubDashboard() {
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
                 {/* Registration button for students */}
                 {isAuthenticated && user && user.role === 'student' && (
-                  registrationStatus[event._id] === true ? (
-                    <span style={{ color: 'green', fontWeight: 'bold' }}>✓ Registered</span>
-                  ) : registrationStatus[event._id] === 'loading' ? (
-                    <button
-                      style={{
-                        padding: '8px 15px',
-                        backgroundColor: '#cccccc',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'not-allowed'
-                      }}
-                      disabled
-                    >
-                      Registering...
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRegister(event._id)}
-                      style={{
-                        padding: '8px 15px',
-                        backgroundColor: '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Register
-                    </button>
-                  )
+                  (() => {
+                    const status = registrationStatus[event._id];
+                    console.log(`Rendering event ${event.title} with status:`, status); // Debug log
+                    
+                    if (!status) return <span style={{ color: 'gray' }}>Loading registration status...</span>;
+
+                    if (status.isRegistered === true) {
+                      return <span style={{ color: 'green', fontWeight: 'bold' }}>✓ Registered</span>;
+                    }
+
+                    if (status.isRegistered === 'loading') {
+                      return (
+                        <button
+                          style={{
+                            padding: '8px 15px',
+                            backgroundColor: '#cccccc',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'not-allowed'
+                          }}
+                          disabled
+                        >
+                          Registering...
+                        </button>
+                      );
+                    }
+
+                    // Check if event has passed (client-side check as fallback)
+                    const eventDate = new Date(event.date);
+                    const now = new Date();
+                    const isEventPassed = eventDate < now;
+
+                    if (isEventPassed) {
+                      return (
+                        <span style={{ color: 'red', fontWeight: 'bold' }}>
+                          🔒 Event has ended
+                        </span>
+                      );
+                    }
+
+                    if (!status.canRegister) {
+                      let message = 'Registration not available';
+                      if (status.eventPassed) {
+                        message = 'Event has ended';
+                      } else if (status.registrationClosed) {
+                        message = 'Registration closed by coordinator';
+                      }
+
+                      return (
+                        <span style={{ color: 'red', fontWeight: 'bold' }}>
+                          🔒 {message}
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <button
+                        onClick={() => handleRegister(event._id)}
+                        style={{
+                          padding: '8px 15px',
+                          backgroundColor: '#4CAF50',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Register
+                      </button>
+                    );
+                  })()
                 )}
               </div>
             </div>

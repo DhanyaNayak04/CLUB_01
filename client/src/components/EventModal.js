@@ -1,6 +1,6 @@
 import React from 'react';
 
-function EventModal({ event, onClose, onRegister, isRegistered, userRole }) {
+function EventModal({ event, onClose, onRegister, isRegistered, userRole, registrationStatus }) {
   if (!event) return null;
 
   return (
@@ -31,29 +31,39 @@ function EventModal({ event, onClose, onRegister, isRegistered, userRole }) {
         <p><strong>Venue:</strong> {event.venue}</p>
         
         <div style={{ marginTop: '20px' }}>
-          {/* Always show register button for students if not registered */}
+          {/* Registration section for students */}
           {userRole === 'student' && (
-            isRegistered ? (
-              <div style={{ color: 'green', fontWeight: 'bold', marginBottom: '10px' }}>
-                ✓ You are registered for this event
-              </div>
-            ) : (
-              <button 
-                onClick={onRegister}
-                style={{
-                  padding: '10px 15px',
-                  backgroundColor: '#ffd700',
-                  color: '#1a237e',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  marginBottom: '10px'
-                }}
-              >
-                Register for Event
-              </button>
-            )
+            <div style={{ marginBottom: '15px' }}>
+              {isRegistered ? (
+                <div style={{ color: 'green', fontWeight: 'bold', marginBottom: '10px' }}>
+                  ✓ You are registered for this event
+                </div>
+              ) : registrationStatus && !registrationStatus.canRegister ? (
+                <div style={{ color: 'red', fontWeight: 'bold', marginBottom: '10px' }}>
+                  🔒 {
+                    registrationStatus.eventPassed ? 'Event has ended' :
+                    registrationStatus.registrationClosed ? 'Registration closed by coordinator' :
+                    'Registration not available'
+                  }
+                </div>
+              ) : (
+                <button 
+                  onClick={onRegister}
+                  style={{
+                    padding: '10px 15px',
+                    backgroundColor: '#ffd700',
+                    color: '#1a237e',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    marginBottom: '10px'
+                  }}
+                >
+                  Register for Event
+                </button>
+              )}
+            </div>
           )}
 
           <button 
@@ -63,8 +73,7 @@ function EventModal({ event, onClose, onRegister, isRegistered, userRole }) {
               backgroundColor: '#f0f0f0',
               border: '1px solid #ddd',
               borderRadius: '4px',
-              cursor: 'pointer',
-              marginLeft: userRole === 'student' ? '10px' : '0'
+              cursor: 'pointer'
             }}
           >
             Close

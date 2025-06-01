@@ -54,7 +54,7 @@ function Register() {
         payload.clubName = formData.clubName;
       }
 
-      const response = await api.post('/auth/register', payload);
+      const response = await api.post('/api/users/register', payload);
 
       setSuccess(response.data.message || 'Registration successful!');
 

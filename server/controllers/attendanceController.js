@@ -86,6 +86,48 @@ exports.markAttendance = async (req, res) => {
   }
 };
 
+// Close registration for an event
+exports.closeRegistration = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Find the event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Check if user has permission to close registration
+    if (event.coordinator.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized to close registration for this event' });
+    }
+
+    // Check if registration is already closed
+    if (event.registrationClosed) {
+      return res.status(400).json({ message: 'Registration is already closed for this event' });
+    }
+
+    // Close registration
+    event.registrationClosed = true;
+    event.registrationClosedAt = Date.now();
+    event.registrationClosedBy = req.user.id;
+    await event.save();
+
+    res.json({
+      message: 'Registration closed successfully',
+      event: {
+        _id: event._id,
+        title: event.title,
+        registrationClosed: event.registrationClosed,
+        registrationClosedAt: event.registrationClosedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error closing registration:', error);
+    res.status(500).json({ message: 'Server error closing registration', error: error.message });
+  }
+};
+
 // Submit attendance for the entire event
 exports.submitAttendance = async (req, res) => {
   try {
@@ -153,9 +195,12 @@ exports.submitAttendance = async (req, res) => {
 
     await Promise.all(attendancePromises);
 
-    // Mark event attendance as submitted
+    // Mark event attendance as submitted and close registration
     event.attendanceCompleted = true;
     event.attendanceSubmittedAt = Date.now();
+    event.registrationClosed = true;
+    event.registrationClosedAt = Date.now();
+    event.registrationClosedBy = req.user.id;
     await event.save();
 
     // Remove any saved progress after submission

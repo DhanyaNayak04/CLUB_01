@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const attendanceController = require('../controllers/attendanceController');
 const auth = require('../middleware/auth');
-const Attendance = require('../models/Attendance'); // Add this import
 
 /**
  * GET event attendees
@@ -21,6 +20,9 @@ router.get('/event/:eventId/attendees', auth, async (req, res) => {
     });
   }
 });
+
+// Close registration for an event
+router.post('/event/:eventId/close-registration', auth, attendanceController.closeRegistration);
 
 // Mark attendance for a student
 router.post('/event/:eventId/student/:studentId', auth, attendanceController.markAttendance);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, submitAttendance, getEventAttendees } from '../services/api'; // Update import to use named import
+import { api, submitAttendance, getEventAttendees, closeRegistration } from '../services/api'; // Add closeRegistration import
 import LogoutButton from '../components/LogoutButton';
 import AttendanceModal from '../components/AttendanceModal';
 import Certificate from '../components/Certificate';
@@ -89,6 +89,8 @@ function CoordinatorDashboard() {
   const [profile, setProfile] = useState({});
   // Add state for submit/generate loading
   const [submittingEventId, setSubmittingEventId] = useState(null);
+  // Add state for close registration loading
+  const [closingRegistrationEventId, setClosingRegistrationEventId] = useState(null);
 
   const fetchVenueRequests = async () => {
     try {
@@ -357,6 +359,25 @@ function CoordinatorDashboard() {
       console.error(err);
     } finally {
       setSubmittingEventId(null);
+    }
+  };
+
+  // Handler for closing registration
+  const handleCloseRegistration = async (eventId) => {
+    if (!window.confirm('Are you sure you want to close registration for this event? This action cannot be undone.')) {
+      return;
+    }
+
+    setClosingRegistrationEventId(eventId);
+    try {
+      await closeRegistration(eventId);
+      alert('Registration closed successfully!');
+      await fetchEvents(); // Refresh events list
+    } catch (err) {
+      alert('Failed to close registration: ' + (err.message || 'Unknown error'));
+      console.error(err);
+    } finally {
+      setClosingRegistrationEventId(null);
     }
   };
 
@@ -706,8 +727,48 @@ function CoordinatorDashboard() {
                   <p><strong>Date:</strong> {new Date(event.date).toLocaleString()}</p>
                   <p><strong>Venue:</strong> {event.venue}</p>
                   
-                  {/* Attendance Buttons */}
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  {/* Registration Status */}
+                  <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                    {event.registrationClosed ? (
+                      <span style={{ color: 'orange', fontWeight: 'bold' }}>
+                        🔒 Registration Closed
+                        {event.registrationClosedAt && (
+                          <span style={{ fontSize: '0.9em', color: '#666', marginLeft: '10px' }}>
+                            ({new Date(event.registrationClosedAt).toLocaleDateString()})
+                          </span>
+                        )}
+                      </span>
+                    ) : new Date() > new Date(event.date) ? (
+                      <span style={{ color: 'red', fontWeight: 'bold' }}>
+                        ⏰ Event Date Passed - Registration Auto-Closed
+                      </span>
+                    ) : (
+                      <span style={{ color: 'green', fontWeight: 'bold' }}>
+                        ✅ Registration Open
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
+                    {/* Close Registration Button */}
+                    {!event.registrationClosed && !event.attendanceCompleted && new Date() <= new Date(event.date) && (
+                      <button
+                        onClick={() => handleCloseRegistration(event._id)}
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#FF9800',
+                          color: 'white',
+                          border: 'none',
+                          cursor: closingRegistrationEventId === event._id ? 'not-allowed' : 'pointer',
+                          borderRadius: '4px'
+                        }}
+                        disabled={closingRegistrationEventId === event._id}
+                      >
+                        {closingRegistrationEventId === event._id ? 'Closing...' : '🔒 Close Registration'}
+                      </button>
+                    )}
+
                     {/* Take Attendance Button */}
                     <button
                       onClick={() => {
@@ -725,6 +786,7 @@ function CoordinatorDashboard() {
                     >
                       Take Attendance
                     </button>
+
                     {/* Submit & Generate Certificates Button */}
                     <button
                       onClick={() => handleSubmitAndGenerate(event._id)}
@@ -741,6 +803,7 @@ function CoordinatorDashboard() {
                       {submittingEventId === event._id ? 'Processing...' : 'Submit & Generate Certificates'}
                     </button>
                   </div>
+
                   {/* Attendance Status */}
                   {event.attendanceCompleted && (
                     <span style={{
@@ -756,7 +819,7 @@ function CoordinatorDashboard() {
                   {/* Display registered students for the event */}
                   {event.registrations && event.registrations.length > 0 && (
                     <div style={{ marginTop: '10px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
-                      <strong>Registered Students:</strong>
+                      <strong>Registered Students ({event.registrations.length}):</strong>
                       <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
                         {event.registrations.map(student => (
                           <li key={student._id} style={{ padding: '5px 0' }}>

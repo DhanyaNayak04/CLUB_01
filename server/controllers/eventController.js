@@ -68,66 +68,77 @@ exports.getEventsByClub = async (req, res) => {
 // Check registration status for an event
 exports.getRegistrationStatus = async (req, res) => {
   try {
-    const eventId = req.params.eventId;
-    const userId = req.user._id;
-    
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
+
+    // Check if user is already registered
+    const isRegistered = event.participants.includes(userId);
     
-    // Check if user is in participants array
-    const isRegistered = event.participants && 
-      event.participants.some(id => id.toString() === userId.toString());
+    // Check if event date has passed
+    const eventPassed = new Date() > new Date(event.date);
     
-    res.json({ isRegistered });
+    // Fix: Only check registrationClosed flag and event date for registration
+    const canRegister = !isRegistered && 
+                       !eventPassed &&
+                       !event.registrationClosed; // Remove any other checks
+
+    res.json({
+      isRegistered,
+      canRegister,
+      registrationClosed: event.registrationClosed || false,
+      attendanceCompleted: event.attendanceCompleted || false,
+      eventPassed,
+      eventDate: event.date // Add event date for debugging
+    });
   } catch (error) {
     console.error('Error checking registration status:', error);
-    res.status(500).json({ message: 'Server error checking registration status' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 // Register for an event
 exports.registerForEvent = async (req, res) => {
   try {
-    if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'Only students can register for events' });
-    }
-    const eventId = req.params.eventId;
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    // Find the event
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    // Prevent registration after deadline
-    if (event.registrationDeadline && new Date() > event.registrationDeadline) {
-      return res.status(400).json({ message: 'Registration deadline has passed for this event' });
+
+    // Check if registration is closed
+    if (event.registrationClosed) {
+      return res.status(400).json({ message: 'Registration is closed for this event' });
     }
-    if (!event.participants) event.participants = [];
-    if (event.participants.some(id => id.toString() === req.user._id.toString())) {
+
+    // Check if event date has passed
+    if (new Date() > new Date(event.date)) {
+      return res.status(400).json({ message: 'Cannot register for past events' });
+    }
+
+    // Remove attendance completion check for registration
+    // Students should be able to register even if attendance hasn't been taken yet
+
+    // Check if user is already registered
+    if (event.participants.includes(userId)) {
       return res.status(400).json({ message: 'You are already registered for this event' });
     }
-    event.participants.push(req.user._id);
-    if (!event.registrations) event.registrations = [];
-    if (!event.registrations.some(r => r.userId.toString() === req.user._id.toString())) {
-      event.registrations.push({ userId: req.user._id, attended: false });
-    }
+
+    // Add user to participants
+    event.participants.push(userId);
     await event.save();
-    try {
-      const user = await User.findById(req.user._id);
-      if (user) {
-        if (!user.registeredEvents) user.registeredEvents = [];
-        if (!user.registeredEvents.includes(eventId)) {
-          user.registeredEvents.push(eventId);
-          await user.save();
-        }
-      }
-    } catch (userUpdateError) {
-      console.error('Error updating user registeredEvents:', userUpdateError);
-    }
+
     res.json({ message: 'Successfully registered for the event' });
   } catch (error) {
     console.error('Error registering for event:', error);
-    res.status(500).json({ message: 'Server error registering for event' });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

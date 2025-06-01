@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create axios instance with base URL - ensure it points to the correct server
 const api = axios.create({
   // Set a default baseURL that matches your server's address
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -33,8 +33,17 @@ const handleApiError = (error) => {
 // Attendance related API calls
 export const getEventAttendees = async (eventId) => {
   try {
-    // Use correct API prefix
+    // Use correct API path with /api prefix
     const response = await api.get(`/api/attendance/event/${eventId}/attendees`);
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
+};
+
+export const closeRegistration = async (eventId) => {
+  try {
+    const response = await api.post(`/api/attendance/event/${eventId}/close-registration`);
     return response.data;
   } catch (error) {
     return handleApiError(error);
@@ -45,16 +54,6 @@ export const submitAttendance = async (eventId, attendanceData) => {
   try {
     // attendanceData should be an array of { userId, present }
     const response = await api.post(`/api/attendance/event/${eventId}/submit`, { attendees: attendanceData });
-    return response.data;
-  } catch (error) {
-    return handleApiError(error);
-  }
-};
-
-export const generateCertificates = async (eventId) => {
-  // Optionally, you can keep this if you have a separate endpoint, but for now, attendance submission will handle certificate generation.
-  try {
-    const response = await api.post(`/api/attendance/event/${eventId}/submit`, { attendees: [] });
     return response.data;
   } catch (error) {
     return handleApiError(error);

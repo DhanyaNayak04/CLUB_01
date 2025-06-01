@@ -3,17 +3,13 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const auth = require('../middleware/auth');
 
-// Verify admin status middleware
-const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    return next();
-  }
-  res.status(403).json({ message: 'Access denied - Admin only' });
-};
+// GET /api/admin/venue-requests
+router.get('/venue-requests', auth, adminController.getVenueRequests);
 
-// Apply auth middleware to each route
-router.get('/venue-requests', auth, isAdmin, adminController.getVenueRequests);
-router.post('/approve-venue/:requestId', auth, isAdmin, adminController.approveVenueRequest);
-router.post('/reject-venue/:requestId', auth, isAdmin, adminController.rejectVenueRequest);
+// POST /api/admin/approve-venue/:requestId
+router.post('/approve-venue/:requestId', auth, adminController.approveVenueRequest);
+
+// POST /api/admin/reject-venue/:requestId
+router.post('/reject-venue/:requestId', auth, adminController.rejectVenueRequest);
 
 module.exports = router;
