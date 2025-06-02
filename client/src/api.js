@@ -1,7 +1,15 @@
 import axios from 'axios';
 
 // Make sure the API URL is correct and matches your server
-const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const getBaseURL = () => {
+  // If deployed on AWS, detect and use the current host
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `http://${window.location.hostname}:5000/api`;
+  }
+  return process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+};
+
+const baseURL = getBaseURL();
 
 // Make sure to log the actual baseURL being used
 console.log('API base URL:', baseURL);

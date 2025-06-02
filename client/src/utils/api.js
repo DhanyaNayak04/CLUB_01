@@ -2,9 +2,17 @@
 
 import axios from 'axios';
 
-// Create axios instance
+// Create axios instance with dynamic base URL for AWS deployment
+const getBaseURL = () => {
+  // If deployed on AWS, detect and use the current host
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return `http://${window.location.hostname}:5000/api`;
+  }
+  return process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+};
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
