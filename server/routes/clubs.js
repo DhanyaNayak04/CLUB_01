@@ -29,6 +29,9 @@ const uploadWithErrorHandling = (req, res, next) => {
   });
 };
 
+// Update description route - accessible by coordinators (must come before /:clubId)
+router.put('/update-description', auth, clubController.updateClubDescription);
+
 // Public routes
 router.get('/', clubController.getAllClubs);
 router.get('/:id', clubController.getClubById);
@@ -37,8 +40,5 @@ router.get('/:id', clubController.getClubById);
 router.post('/', auth, uploadWithErrorHandling, clubController.createClub);
 router.put('/:clubId', auth, uploadWithErrorHandling, clubController.updateClub);
 router.delete('/:clubId', auth, clubController.deleteClub);
-
-// Update description route - accessible by coordinators
-router.put('/update-description', auth, clubController.updateClubDescription);
 
 module.exports = router;

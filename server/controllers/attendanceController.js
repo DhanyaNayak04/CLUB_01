@@ -14,24 +14,57 @@ exports.getEventAttendees = async (req, res) => {
     const savedProgress = await AttendanceProgress.findOne({
       eventId,
       coordinatorId: req.user.id
-    });
-
-    // Find the event and populate participants (users)
-    // FIX: Only populate 'participants', not 'registrations.user'
-    const event = await Event.findById(eventId).populate('participants', 'name email department');
+    });    // Find the event and populate registered students
+    const event = await Event.findById(eventId)
+      .populate('registeredStudents', 'name email department studentId')
+      .populate('participants', 'name email department studentId')
+      .populate({
+        path: 'registrations.userId',
+        select: 'name email department studentId'
+      });
 
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Extract attendees from participants
-    let attendees = event.participants.map(user => ({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      department: user.department,
-      present: false // Default to not present
-    }));
+    // Extract attendees from registeredStudents (primary), then fallback to participants and registrations
+    let attendees = [];
+    
+    // First try registered students (this is where registrations are actually stored)
+    if (event.registeredStudents && event.registeredStudents.length > 0) {
+      attendees = event.registeredStudents.map(user => ({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        department: user.department,
+        studentId: user.studentId,
+        present: false // Default to not present
+      }));
+    }
+    // Fallback to participants array
+    else if (event.participants && event.participants.length > 0) {
+      attendees = event.participants.map(user => ({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        department: user.department,
+        studentId: user.studentId,
+        present: false // Default to not present
+      }));
+    }
+    // Final fallback to registrations array
+    else if (event.registrations && event.registrations.length > 0) {
+      attendees = event.registrations
+        .filter(reg => reg.userId) // Filter out invalid registrations
+        .map(reg => ({
+          _id: reg.userId._id,
+          name: reg.userId.name,
+          email: reg.userId.email,
+          department: reg.userId.department,
+          studentId: reg.userId.studentId,
+          present: false // Default to not present
+        }));
+    }
 
     // If we have saved progress, apply that to our attendees
     if (savedProgress && savedProgress.attendees.length > 0) {

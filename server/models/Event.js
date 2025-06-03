@@ -36,14 +36,18 @@ const eventSchema = new mongoose.Schema({
   isVenueRequest: {
     type: Boolean,
     default: false
-  },
-  venueRequestId: {
+  },  venueRequestId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'VenueRequest'
   },
   timeFrom: String,
   timeTo: String,
   participants: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  // Legacy field - same as participants for backward compatibility
+  registeredStudents: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],

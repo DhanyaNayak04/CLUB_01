@@ -157,12 +157,15 @@ exports.getCertificates = async (req, res) => {
 };
 
 exports.getMyEvents = async (req, res) => {
-  try {
-    // Find events where the user is a participant
+  try {    // Find events where the user is registered
     const Event = require('../models/Event');
     
     const events = await Event.find({
-      participants: req.user._id,
+      $or: [
+        { registeredStudents: req.user._id },
+        { participants: req.user._id },
+        { 'registrations.userId': req.user._id }
+      ],
       isVenueRequest: false // Only actual events, not venue requests
     })
       .populate('club', 'name')
