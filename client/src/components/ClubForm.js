@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import api from '../api';
+import { api } from '../utils/api';
 
 function ClubForm({ onSuccess, club }) {
   const [formData, setFormData] = useState({
@@ -55,7 +55,7 @@ function ClubForm({ onSuccess, club }) {
         throw new Error('No authentication token found');
       }
       
-      const response = await api.post('/api/clubs', formPayload, {
+      const response = await api.post('/clubs', formPayload, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import api from '../api';
+import { users } from '../utils/api';
 
 const PrivateRoute = ({ children, requiredRole }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
@@ -20,7 +20,7 @@ const PrivateRoute = ({ children, requiredRole }) => {
 
       try {
         // Verify token and get user data
-        const response = await api.get('/api/users/me');
+        const response = await users.getProfile();
         setIsAuthenticated(true);
         setUserRole(response.data.role);
       } catch (error) {

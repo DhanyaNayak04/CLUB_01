@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../utils/api';
+import { clubs as clubsAPI, events as eventsAPI } from '../utils/api';
 import ClubCard from '../components/ClubCard';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; // adjust path if needed
+import { useAuth } from '../contexts/AuthContext';
 
 const Home = () => {
   const [clubs, setClubs] = useState([]);
@@ -12,15 +12,14 @@ const Home = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const clubsContainerRef = useRef(null);
-  const eventsContainerRef = useRef(null);
+  const clubsContainerRef = useRef(null);  const eventsContainerRef = useRef(null);
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth(); // get auth state
+  const { isAuthenticated } = useAuth();
 
   const fetchClubs = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/clubs');
+      const response = await clubsAPI.getAll();
       setClubs(response.data);
     } catch (err) {
       setErrorMessage("Failed to load clubs. Please try again later.");
@@ -28,11 +27,10 @@ const Home = () => {
       setLoading(false);
     }
   }, []);
-
   const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/events/recent');
+      const response = await eventsAPI.getRecent();
       setEvents(response.data);
       setAuthRequired(false);
       setErrorMessage(null);

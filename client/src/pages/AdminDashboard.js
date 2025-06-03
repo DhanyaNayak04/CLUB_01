@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import api from '../api';
+import { users, clubs as clubsAPI, admin } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import LogoutButton from '../components/LogoutButton';
 import ClubForm from '../components/ClubForm';
@@ -7,7 +7,7 @@ import ClubForm from '../components/ClubForm';
 function AdminDashboard() {
   const [coordinatorRequests, setCoordinatorRequests] = useState([]);
   const [venueRequests, setVenueRequests] = useState([]);
-  const [clubs, setClubs] = useState([]);
+  const [clubsList, setClubsList] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('coordinator');
@@ -20,26 +20,16 @@ function AdminDashboard() {
       if (!token) {
         navigate('/login');
         return;
-      }
-
-      try {
-        setLoading(true);
-
-        // Fetch coordinator requests
-        const coordinatorRes = await api.get('/api/users/coordinator-requests', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+      }      try {
+        setLoading(true);        // Fetch coordinator requests
+        const coordinatorRes = await users.getCoordinatorRequests();
         setCoordinatorRequests(coordinatorRes.data);
 
         // Fetch venue requests
-        const venueRes = await api.get('/api/admin/venue-requests', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setVenueRequests(venueRes.data);
-
-        // Fetch clubs
-        const clubsRes = await api.get('/api/clubs');
-        setClubs(clubsRes.data);
+        const venueRes = await admin.getVenueRequests();
+        setVenueRequests(venueRes.data);        // Fetch clubs
+        const clubsRes = await clubsAPI.getAll();
+        setClubsList(clubsRes.data);
 
         setError('');
       } catch (err) {
@@ -52,14 +42,10 @@ function AdminDashboard() {
 
     fetchData();
   }, [navigate]);
-
   // Handle coordinator approval
   const handleApproveCoordinator = async (userId) => {
-    const token = localStorage.getItem('token');
     try {
-      await api.post(`/api/users/approve-coordinator/${userId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await users.approveCoordinator(userId);
       setCoordinatorRequests(coordinatorRequests.filter(r => r._id !== userId));
       alert('Coordinator approved successfully');
     } catch (err) {
@@ -67,14 +53,10 @@ function AdminDashboard() {
       setError('Failed to approve coordinator.');
     }
   };
-
   // Handle coordinator rejection
   const handleRejectCoordinator = async (userId) => {
-    const token = localStorage.getItem('token');
     try {
-      await api.post(`/api/users/reject-coordinator/${userId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await users.rejectCoordinator(userId);
       setCoordinatorRequests(coordinatorRequests.filter(r => r._id !== userId));
       alert('Coordinator request rejected');
     } catch (err) {
@@ -82,10 +64,8 @@ function AdminDashboard() {
       setError('Failed to reject coordinator.');
     }
   };
-
   // Handle venue approval
   const handleApproveVenue = async (requestId) => {
-    const token = localStorage.getItem('token');
     try {
       setError(''); // Clear previous errors
 
@@ -96,9 +76,7 @@ function AdminDashboard() {
       setVenueRequests(updatingRequests);
 
       // Make API call
-      const response = await api.post(`/api/admin/approve-venue/${requestId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await admin.approveVenue(requestId);
 
       // Update state with result
       setVenueRequests(venueRequests.map(req => 
@@ -117,10 +95,8 @@ function AdminDashboard() {
       setError(`Failed to approve venue request: ${err.response?.data?.message || err.message}`);
     }
   };
-
   // Handle venue rejection
   const handleRejectVenue = async (requestId) => {
-    const token = localStorage.getItem('token');
     try {
       setError(''); // Clear previous errors
 
@@ -131,9 +107,7 @@ function AdminDashboard() {
       setVenueRequests(updatingRequests);
 
       // Make API call
-      await api.post(`/api/admin/reject-venue/${requestId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await admin.rejectVenue(requestId);
 
       // Remove the rejected request from state
       setVenueRequests(venueRequests.filter(req => req._id !== requestId));
@@ -265,11 +239,54 @@ function AdminDashboard() {
           )}
         </div>
       )}
-      
-      {/* Venue requests tab */}
+        {/* Venue requests tab */}
       {activeTab === 'venue' && (
         <div>
           <h3>Venue Requests</h3>
+          
+          {/* Venue Cleanup Management */}
+          <div style={{ 
+            marginBottom: '20px', 
+            padding: '15px', 
+            backgroundColor: '#f9f9f9', 
+            borderRadius: '5px',
+            border: '1px solid #e0e0e0'
+          }}>
+            <h4 style={{ marginTop: 0, color: '#333' }}>🗂️ Venue Request Management</h4>
+            <p style={{ margin: '8px 0', color: '#666', fontSize: '14px' }}>
+              <strong>System Policy:</strong> Only the 5 most recent approved venue requests are kept in the database. 
+              Older approved requests are automatically cleaned up to maintain optimal performance.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+              <span style={{ color: '#666' }}>
+                Approved venue requests: <strong>{venueRequests.filter(req => req.approved).length}</strong>
+              </span>
+              <button
+                onClick={async () => {
+                  try {
+                    await admin.cleanupVenueRequests();
+                    alert('Venue cleanup completed successfully!');
+                    // Refresh data
+                    window.location.reload();
+                  } catch (err) {
+                    alert('Cleanup failed: ' + (err.response?.data?.message || err.message));
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#ff9800',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                🧹 Manual Cleanup
+              </button>
+            </div>
+          </div>
+          
           {loading ? (
             <p>Loading venue requests...</p>
           ) : venueRequests.length === 0 ? (
@@ -366,14 +383,13 @@ function AdminDashboard() {
           </div>
           
           {/* Existing clubs list */}
-          <h4>Existing Clubs</h4>
-          {loading ? (
+          <h4>Existing Clubs</h4>          {loading ? (
             <p>Loading clubs...</p>
-          ) : clubs.length === 0 ? (
+          ) : clubsList.length === 0 ? (
             <p>No clubs created yet.</p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
-              {clubs.map(club => (
+              {clubsList.map(club => (
                 <div key={club._id} style={{ border: '1px solid #ddd', borderRadius: '5px', padding: '15px' }}>
                   <div style={{ height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '10px' }}>
                     {club.logoUrl ? (

@@ -1,231 +1,209 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  getEventAttendees, 
-  submitAttendance, 
-  saveAttendanceProgress
-} from '../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import { attendance, handleApiError } from '../utils/api';
 import './AttendanceModal.css';
 
 const AttendanceModal = ({ eventId, onClose, disabled }) => {
   const [attendees, setAttendees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [submitStatus, setSubmitStatus] = useState(null);
-  const [eventTitle, setEventTitle] = useState('');
+  const [loading, setLoading] = useState(true);  const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [attendanceCompleted, setAttendanceCompleted] = useState(false);
 
-  useEffect(() => {
-    const fetchAttendees = async () => {
-      try {
-        setLoading(true);
-        // Use eventId directly
-        const data = await getEventAttendees(eventId);
-
-        // Extract event title if available in the response
-        if (data.event && data.event.title) {
-          setEventTitle(data.event.title);
-        }
-        // Check if attendance is completed
-        if (data.event && data.event.attendanceCompleted) {
-          setAttendanceCompleted(true);
-        }
-
-        // Set attendees from the response
-        const attendeesList = Array.isArray(data) ? data : 
-                             (data.attendees ? data.attendees : []);
-
-        setAttendees(attendeesList.map(attendee => ({
-          ...attendee,
-          present: attendee.present || false
-        })));
-
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching attendees:', err);
-        setError('Failed to load attendees: ' + (err.message || ''));
-        setLoading(false);
+  const fetchAttendees = useCallback(async () => {
+    try {      setLoading(true);
+      setError('');
+      const response = await attendance.getEventAttendees(eventId);
+        // Transform the data to include attendance status
+      // The server returns {attendees: [...], event: {...}}
+      console.log('Server response:', response.data);
+      
+      const attendeesArray = response.data.attendees || [];
+        if (!Array.isArray(attendeesArray)) {
+        console.error('Response data attendees is not an array:', response.data);
+        throw new Error('Unexpected response format from server');
       }
-    };
-
-    fetchAttendees();
+      
+      const attendeesData = attendeesArray.map(attendee => ({
+        ...attendee,
+        isPresent: attendee.present || attendee.attendanceStatus === 'present' || false
+      }));
+      
+      setAttendees(attendeesData);
+    } catch (err) {
+      console.error('Error fetching attendees:', err);
+      setError(handleApiError(err));
+    } finally {
+      setLoading(false);
+    }
   }, [eventId]);
 
-  const handleAttendanceChange = (id, isPresent) => {
-    setAttendees(prevAttendees => 
-      prevAttendees.map(attendee => 
-        attendee._id === id ? { ...attendee, present: isPresent } : attendee
+  useEffect(() => {
+    fetchAttendees();
+  }, [fetchAttendees]);
+
+  const handleAttendanceChange = (attendeeId, isPresent) => {
+    setAttendees(prevAttendees =>
+      prevAttendees.map(attendee =>
+        attendee._id === attendeeId
+          ? { ...attendee, isPresent }
+          : attendee
       )
     );
-    // Auto-save when changes are made
-    autoSaveAttendance();
-  };
+  };  const handleSubmit = async () => {
+    try {
+      setSubmitting(true);
+      setError('');
+      setSuccessMessage('');
 
-  // Debounce auto-save to avoid too many requests
-  let autoSaveTimer = null;
-  const autoSaveAttendance = () => {
-    setSaved(false);
-    
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
+      // Prepare attendance data - use 'present' instead of 'isPresent'
+      const attendanceData = attendees.map(attendee => ({
+        userId: attendee._id,
+        present: attendee.isPresent
+      }));
+
+      await attendance.submitAttendance(eventId, attendanceData);
+      setSuccessMessage('Attendance submitted successfully!');
+      
+      // Close modal after a brief delay to show success message
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      console.error('Error submitting attendance:', err);
+      setError(handleApiError(err));
+    } finally {
+      setSubmitting(false);
     }
-    
-    autoSaveTimer = setTimeout(() => {
-      handleSaveProgress();
-    }, 2000); // 2 second delay
   };
-
   const handleSaveProgress = async () => {
     try {
       setSaving(true);
-      
-      await saveAttendanceProgress(
-        eventId, 
-        attendees.map(({ _id, present }) => ({ userId: _id, present }))
-      );
-      
-      setSaving(false);
-      setSaved(true);
-      
-      // Hide "Saved" message after 3 seconds
-      setTimeout(() => {
-        setSaved(false);
-      }, 3000);
-      
-    } catch (err) {
-      console.error('Error saving attendance progress:', err);
-      setSaving(false);
-      setError('Failed to save progress: ' + (err.message || ''));
-    }
-  };
+      setError('');
+      setSuccessMessage('');
 
-  const handleSubmit = async () => {
-    try {
-      setSubmitStatus('submitting');
-      
-      // Ensure attendees are mapped to { userId, present }
-      const payload = attendees.map(({ _id, present }) => ({
-        userId: _id,
-        present: !!present
+      // Prepare progress data - use 'userId' and 'present' as expected by server
+      const progressData = attendees.map(attendee => ({
+        userId: attendee._id,
+        present: attendee.isPresent
       }));
 
-      console.log('Submitting attendance data:', {
-        eventId: eventId,
-        attendees: payload
-      });
+      await attendance.saveProgress(eventId, progressData);
+      setSuccessMessage('Progress saved successfully!');
       
-      await submitAttendance(eventId, payload);
-      
-      setSubmitStatus('success');
-      
+      // Clear success message after a brief delay
       setTimeout(() => {
-        onClose();
-      }, 2000);
-      
+        setSuccessMessage('');
+      }, 3000);
     } catch (err) {
-      console.error('Error submitting attendance:', err);
-      setSubmitStatus('error');
-      setError(err.message || 'Failed to submit attendance');
+      console.error('Error saving progress:', err);
+      setError(handleApiError(err));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const filteredAttendees = attendees.filter(attendee => 
+  const filteredAttendees = attendees.filter(attendee =>
     attendee.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     attendee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (attendee.department && attendee.department.toLowerCase().includes(searchTerm.toLowerCase()))
+    attendee.studentId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const presentCount = attendees.filter(attendee => attendee.isPresent).length;
+
+  if (disabled) {
+    return null;
+  }
+
   return (
-    <div className="attendance-modal">
-      <div className="attendance-modal-content">
+    <div className="attendance-modal" onClick={onClose}>
+      <div className="attendance-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="attendance-header">
-          <h2 className="attendance-title">Take Attendance: {eventTitle || 'Event'}</h2>
+          <h2 className="attendance-title">Mark Attendance</h2>
           <button className="close-button" onClick={onClose}>&times;</button>
         </div>
-        {attendanceCompleted || disabled ? (
-          <p className="success-message">Attendance has already been submitted for this event. You cannot take attendance again.</p>
-        ) : loading ? (
-          <p>Loading attendees...</p>
-        ) : error ? (
-          <p className="error-message">{error}</p>
+
+        {error && (
+          <div className="error-message" style={{ color: 'red', marginBottom: '15px' }}>
+            {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="success-message" style={{ color: 'green', marginBottom: '15px' }}>
+            {successMessage}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            Loading attendees...
+          </div>
         ) : (
           <>
             <input
               type="text"
               className="search-bar"
-              placeholder="Search by name, email or department..."
+              placeholder="Search by name, email, or student ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            
-            {filteredAttendees.length === 0 ? (
-              <p>No registered students found for this event.</p>
-            ) : (
-              <table className="attendance-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Department</th>
-                    <th>Present</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAttendees.map(attendee => (
-                    <tr key={attendee._id}>
-                      <td>{attendee.name}</td>
-                      <td>{attendee.email}</td>
-                      <td>{attendee.department || 'N/A'}</td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          className="attendance-checkbox"
-                          checked={attendee.present}
-                          onChange={(e) => handleAttendanceChange(attendee._id, e.target.checked)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            
-            <div className="save-status">
-              {saving && <span className="saving-message">Saving...</span>}
-              {saved && <span className="saved-message">Progress saved!</span>}
+
+            <div style={{ marginBottom: '15px', fontWeight: '600' }}>
+              Present: {presentCount} / {attendees.length}
             </div>
-            
-            <div className="attendance-actions">
+
+            <table className="attendance-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Student ID</th>
+                  <th>Present</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAttendees.map((attendee) => (
+                  <tr key={attendee._id}>
+                    <td>{attendee.name || 'N/A'}</td>
+                    <td>{attendee.email || 'N/A'}</td>
+                    <td>{attendee.studentId || 'N/A'}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="attendance-checkbox"
+                        checked={attendee.isPresent}
+                        onChange={(e) => handleAttendanceChange(attendee._id, e.target.checked)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {filteredAttendees.length === 0 && !loading && (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                {searchTerm ? 'No attendees found matching your search.' : 'No registered attendees found.'}
+              </div>
+            )}            <div className="attendance-actions">
               <button className="cancel-button" onClick={onClose}>
                 Cancel
               </button>
               <button 
-                className="save-button" 
+                className="save-progress-button" 
                 onClick={handleSaveProgress}
-                disabled={saving || submitStatus === 'submitting'}
+                disabled={saving || submitting || attendees.length === 0}
               >
                 {saving ? 'Saving...' : 'Save Progress'}
               </button>
               <button 
                 className="submit-button" 
                 onClick={handleSubmit}
-                disabled={submitStatus === 'submitting'}
+                disabled={submitting || saving || attendees.length === 0}
               >
-                {submitStatus === 'submitting' ? 'Submitting...' : 'Submit Attendance'}
+                {submitting ? 'Submitting...' : 'Submit Attendance'}
               </button>
             </div>
-            
-            {submitStatus === 'success' && (
-              <p className="success-message">
-                Attendance submitted successfully!
-              </p>
-            )}
-            
-            {submitStatus === 'error' && (
-              <p className="error-message">{error}</p>
-            )}
           </>
         )}
       </div>

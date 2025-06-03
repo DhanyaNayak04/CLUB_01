@@ -20,7 +20,7 @@ function SignUp() {
     const fetchClubs = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/api/clubs');
+        const response = await api.get('/clubs');
         setClubs(response.data);
       } catch (err) {
         console.error('Error fetching clubs:', err);

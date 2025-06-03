@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../api';
+import { auth, clubs as clubsAPI } from '../utils/api';
 import { useNavigate, Link } from 'react-router-dom';
 
 function SignUp() {
@@ -17,10 +17,9 @@ function SignUp() {
 
   // Fetch available clubs when component mounts
   useEffect(() => {
-    const fetchClubs = async () => {
-      try {
+    const fetchClubs = async () => {      try {
         setLoading(true);
-        const response = await api.get('/api/clubs');
+        const response = await clubsAPI.getAll();
         setClubs(response.data);
       } catch (err) {
         console.error('Error fetching clubs:', err);
@@ -51,7 +50,7 @@ function SignUp() {
         payload.clubName = clubName;
       }
       
-      const res = await api.post('/api/auth/signup', payload);
+      const res = await auth.register(payload);
       setSuccess(res.data.message);
       
       if (role === 'student') {

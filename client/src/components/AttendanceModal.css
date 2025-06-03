@@ -94,6 +94,30 @@
   background-color: #45a049;
 }
 
+.submit-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.save-progress-button {
+  padding: 10px 20px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.save-progress-button:hover {
+  background-color: #1976D2;
+}
+
+.save-progress-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
 .cancel-button {
   padding: 10px 20px;
   background-color: #f44336;
@@ -106,6 +130,11 @@
 
 .cancel-button:hover {
   background-color: #d32f2f;
+}
+
+.cancel-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
 .search-bar {

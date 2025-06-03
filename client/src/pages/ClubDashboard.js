@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../api';
+import { api, clubs, events } from '../utils/api';
 
 // Add AuthContext to get user info
 import { useAuth } from '../contexts/AuthContext';
@@ -9,52 +9,61 @@ function ClubDashboard() {
   const { clubId, id } = useParams();
   const navigate = useNavigate();
   // Use either clubId (from /club-dashboard/:clubId) or id (from /club/:id)
-  const clubParam = clubId || id;
-  const [club, setClub] = useState(null);
-  const [events, setEvents] = useState([]);
+  const clubParam = clubId || id;  const [club, setClub] = useState(null);
+  const [clubEvents, setClubEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { user, isAuthenticated } = useAuth();
   const [registrationStatus, setRegistrationStatus] = useState({}); // eventId: true/false/loading
-
+  
   useEffect(() => {
     const fetchClubDetails = async () => {
       try {
         setLoading(true);
+        console.log('Fetching club details for clubParam:', clubParam);
+        
         // Get club details
-        const clubResponse = await api.get(`/api/clubs/${clubParam}`);
+        const clubResponse = await clubs.getById(clubParam);
+        console.log('Club data received:', clubResponse.data);
         setClub(clubResponse.data);
 
         // Get events for this club
-        const eventsResponse = await api.get(`/api/events/club/${clubParam}`);
-        setEvents(eventsResponse.data);
+        const eventsResponse = await events.getByClub(clubParam);
+        console.log('Events data received:', eventsResponse.data);
+        setClubEvents(eventsResponse.data);
 
         setError(null);
       } catch (err) {
-        setError('Failed to load club details. Please try again later.');
-      } finally {
+        console.error('Error fetching club details:', err);
+        setError('Failed to load club details. Please try again later.');      } finally {
         setLoading(false);
       }
     };
 
     if (clubParam) {
       fetchClubDetails();
+    } else {
+      setError('No club ID provided');
+      setLoading(false);
     }
   }, [clubParam]);
-
+  
   // Fetch registration status for all events if student
   useEffect(() => {
     const fetchRegistrationStatus = async () => {
-      if (user && user.role === 'student' && events.length > 0) {
-        console.log('Fetching registration status for', events.length, 'events'); // Debug log
+      if (user && user.role === 'student' && clubEvents.length > 0) {
+        console.log('Fetching registration status for', clubEvents.length, 'events'); // Debug log
+        
+        // Since the registration-status endpoint is not implemented, let's use a fallback approach
         const statusObj = {};
-        for (const event of events) {
+        for (const event of clubEvents) {
           try {
-            const res = await api.get(`/api/events/${event._id}/registration-status`);
+            // Try to get status from API first
+            const res = await api.get(`/events/${event._id}/registration-status`);
             console.log(`Registration status for event ${event.title}:`, res.data); // Debug log
             statusObj[event._id] = {
               isRegistered: res.data.isRegistered || false,
-              canRegister: res.data.canRegister !== undefined ? res.data.canRegister : true, // Default to true if not specified
+              canRegister: res.data.canRegister !== undefined ? res.data.canRegister : true,
               registrationClosed: res.data.registrationClosed || false,
               attendanceCompleted: res.data.attendanceCompleted || false,
               eventPassed: res.data.eventPassed || false,
@@ -82,20 +91,19 @@ function ClubDashboard() {
       }
     };
     fetchRegistrationStatus();
-  }, [user, events]);
+  }, [user, clubEvents]);
 
   // Register handler
   const handleRegister = async (eventId) => {
     setRegistrationStatus(prev => ({ 
-      ...prev, 
-      [eventId]: { 
+      ...prev,      [eventId]: { 
         ...prev[eventId], 
-        isRegistered: 'loading' 
-      } 
+        isRegistered: 'loading'
+      }
     }));
     try {
-      await api.post(`/api/events/${eventId}/register`);
-      setRegistrationStatus(prev => ({ 
+      await events.register(eventId);
+      setRegistrationStatus(prev => ({
         ...prev, 
         [eventId]: { 
           ...prev[eventId], 
@@ -213,13 +221,12 @@ function ClubDashboard() {
             <p style={{ fontSize: '16px', lineHeight: '1.5', wordBreak: 'break-word' }}>{club.description || 'No description available.'}</p>
           </div>
         </div>
-      </div>
-      <h2>Upcoming Events</h2>
-      {events.length === 0 ? (
+      </div>      <h2>Upcoming Events</h2>
+      {clubEvents.length === 0 ? (
         <p>No upcoming events at the moment. Check back later!</p>
       ) : (
         <div>
-          {events.map(event => (
+          {clubEvents.map(event => (
             <div
               key={event._id}
               style={{

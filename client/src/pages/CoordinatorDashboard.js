@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, submitAttendance, getEventAttendees, closeRegistration } from '../services/api'; // Add closeRegistration import
+import { api, attendance, users, events as eventsAPI, clubs } from '../utils/api';
 import LogoutButton from '../components/LogoutButton';
 import AttendanceModal from '../components/AttendanceModal';
 import Certificate from '../components/Certificate';
@@ -59,7 +59,7 @@ function CoordinatorProfile({ profile, onProfilePicChange }) {
 }
 
 function CoordinatorDashboard() {
-  const [events, setEvents] = useState([]);
+  const [coordinatorEvents, setCoordinatorEvents] = useState([]);
   const [venueRequest, setVenueRequest] = useState({
     venue: '',
     eventName: '',
@@ -79,6 +79,7 @@ function CoordinatorDashboard() {
   const [club, setClub] = useState(null);
   const [editingClub, setEditingClub] = useState(false);
   const [clubDescription, setClubDescription] = useState('');
+  const [updatingDescription, setUpdatingDescription] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
   const [attendanceEventId, setAttendanceEventId] = useState(null);
@@ -91,11 +92,10 @@ function CoordinatorDashboard() {
   const [submittingEventId, setSubmittingEventId] = useState(null);
   // Add state for close registration loading
   const [closingRegistrationEventId, setClosingRegistrationEventId] = useState(null);
-
   const fetchVenueRequests = async () => {
     try {
       console.log('Fetching venue requests...');
-      const res = await api.get('/api/events/venue-requests');
+      const res = await api.get('/events/venue-requests');
       console.log('Venue requests data:', res.data);
 
       const approved = [];
@@ -117,20 +117,19 @@ function CoordinatorDashboard() {
       console.error('Error fetching venue requests:', error);
     }
   };
-
   // When fetching events, also fetch registered students for each event
   const fetchEvents = async () => {
     try {
       // Fetch only events published by the logged-in coordinator
-      const eventsResponse = await api.get('/api/events/my');
+      const eventsResponse = await api.get('/events/my');
       const eventsWithRegistrations = await Promise.all(
         eventsResponse.data.map(async (event) => {
           // Fetch registered students for each event
-          const registrationsRes = await api.get(`/api/events/${event._id}/registrations`);
+          const registrationsRes = await api.get(`/events/${event._id}/registrations`);
           return { ...event, registrations: registrationsRes.data };
         })
       );
-      setEvents(eventsWithRegistrations);
+      setCoordinatorEvents(eventsWithRegistrations);
     } catch (err) {
       console.error('Failed to load events or registrations.', err);
     }
@@ -140,17 +139,24 @@ function CoordinatorDashboard() {
     const fetchData = async () => {
       try {
         // Get user profile first to access club ID
-        const userProfileRes = await api.get('/api/users/me');
-        setProfile(userProfileRes.data);
-        console.log('Coordinator profile:', userProfileRes.data);
+        const profileResponse = await api.get('/users/me');
+        setProfile(profileResponse.data);
+        console.log('Coordinator profile:', profileResponse.data);
+        
+        // Debug club information from profile
+        console.log('Club data from profile:', {
+          clubId: profileResponse.data.clubId,
+          club: profileResponse.data.club,
+          clubName: profileResponse.data.clubName
+        });
         
         // Check if club is associated
-        if (!userProfileRes.data.club && userProfileRes.data.clubName) {
-          console.warn('Coordinator has clubName but no club reference:', userProfileRes.data.clubName);
+        if (!profileResponse.data.club && profileResponse.data.clubName) {
+          console.warn('Coordinator has clubName but no club reference:', profileResponse.data.clubName);
         }
-        
-        if (userProfileRes.data && userProfileRes.data.club) {
-          const clubRes = await api.get(`/api/clubs/${userProfileRes.data.club._id}`);
+
+        if (profileResponse.data && profileResponse.data.club) {
+          const clubRes = await clubs.getById(profileResponse.data.club._id);
           setClub(clubRes.data);
           setClubDescription(clubRes.data.description || '');
           console.log('Club data loaded:', clubRes.data);
@@ -187,7 +193,7 @@ function CoordinatorDashboard() {
   const handleVenueRequest = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/api/events/request-venue', venueRequest);
+      await api.post('/events/request-venue', venueRequest);
       alert('Venue request sent to admin!');
       setVenueRequest({
         venue: '',
@@ -235,23 +241,15 @@ function CoordinatorDashboard() {
         title: eventForm.title.trim(),
         description: eventForm.description.trim(),
         venueRequestId: eventForm.venueRequestId,
-      };
-
-      // Add date if specified
+      };      // Add date if specified
       if (eventForm.date) {
         eventData.date = eventForm.date;
       }
-
+      
       console.log('Sending event data:', eventData);
       
-      // Make API request
-      const token = localStorage.getItem('token');
-      const response = await api.post('/api/events', eventData, {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Make API request using events helper
+      const response = await eventsAPI.create(eventData);
       
       console.log('Event created successfully:', response.data);
       
@@ -278,26 +276,23 @@ function CoordinatorDashboard() {
       alert(`Error: ${errorMessage}`);
     }
   };
-
   // Fix the handleUpdateClubDescription function
   const handleUpdateClubDescription = async (e) => {
     e.preventDefault();
+    setUpdatingDescription(true);
     try {
       console.log('Updating club description:', clubDescription);
       
-      // Add the club ID to the request if it exists
       if (!club || !club._id) {
         throw new Error('No club associated with your account');
       }
       
-      const response = await api.put(`/api/clubs/${club._id}`, { 
-        description: clubDescription 
-      });
-      
+      console.log('Club info for update:', club);
+      const response = await clubs.updateDescription(clubDescription);
       console.log('Club update response:', response.data);
 
       // Update the local state with the response data
-      setClub(response.data);
+      setClub(response.data.club);
       setEditingClub(false);
       alert('Club description updated successfully');
     } catch (error) {
@@ -309,6 +304,8 @@ function CoordinatorDashboard() {
       }
       
       alert(errorMessage);
+    } finally {
+      setUpdatingDescription(false);
     }
   };
 
@@ -319,7 +316,6 @@ function CoordinatorDashboard() {
     setSelectedEventForCertificate(event);
     setShowCertificate(true);
   };
-
   // Fix 2: Update handleAttendance to send the correct request
   const handleAttendance = (eventId) => {
     console.log(`Opening attendance modal for event ID: ${eventId}`);
@@ -332,25 +328,22 @@ function CoordinatorDashboard() {
     try {
       const formData = new FormData();
       formData.append('profilePic', file);
-      const res = await api.post('/api/users/upload-profile-pic', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await users.uploadProfilePic(formData);
       setProfile(prev => ({ ...prev, profilePic: res.data.profilePicUrl }));
     } catch (err) {
       alert('Failed to upload profile picture');
     }
   };
-
   // Handler for "Submit & Generate Certificates"
   const handleSubmitAndGenerate = async (eventId) => {
     setSubmittingEventId(eventId);
     try {
       // Fetch latest attendees (with present status)
-      const data = await getEventAttendees(eventId);
+      const data = await attendance.getEventAttendees(eventId);
       const attendees = (data.attendees || []).map(({ _id, present }) => ({ userId: _id, present }));
 
       // Submit attendance and generate certificates
-      await submitAttendance(eventId, attendees);
+      await attendance.submitAttendance(eventId, attendees);
 
       alert('Attendance submitted and certificates generated/sent!');
       await fetchEvents();
@@ -366,11 +359,9 @@ function CoordinatorDashboard() {
   const handleCloseRegistration = async (eventId) => {
     if (!window.confirm('Are you sure you want to close registration for this event? This action cannot be undone.')) {
       return;
-    }
-
-    setClosingRegistrationEventId(eventId);
+    }    setClosingRegistrationEventId(eventId);
     try {
-      await closeRegistration(eventId);
+      await attendance.closeRegistration(eventId);
       alert('Registration closed successfully!');
       await fetchEvents(); // Refresh events list
     } catch (err) {
@@ -510,16 +501,17 @@ function CoordinatorDashboard() {
               </div>
               <button
                 type="submit"
+                disabled={updatingDescription}
                 style={{ 
                   padding: '8px 15px', 
-                  backgroundColor: '#4CAF50', 
+                  backgroundColor: updatingDescription ? '#cccccc' : '#4CAF50', 
                   color: 'white', 
                   border: 'none', 
-                  cursor: 'pointer',
+                  cursor: updatingDescription ? 'not-allowed' : 'pointer',
                   borderRadius: '4px'
                 }}
               >
-                Update Description
+                {updatingDescription ? 'Updating...' : 'Update Description'}
               </button>
             </form>
           ) : (
@@ -711,17 +703,15 @@ function CoordinatorDashboard() {
         <div style={{ padding: '20px', color: '#888' }}>
           No approved venues available. Please request and wait for venue approval.
         </div>
-      )}
-
-      {/* My Events Tab */}
+      )}      {/* My Events Tab */}
       {activeTab === 'events' && (
         <div>
           <h3>My Published Events</h3>
-          {events.length === 0 ? (
+          {coordinatorEvents.length === 0 ? (
             <p>No events published yet. Request venue approval and post events.</p>
           ) : (
             <ul style={{ listStyleType: 'none', padding: 0 }}>
-              {events.map(event => (
+              {coordinatorEvents.map(event => (
                 <li key={event._id} style={{ padding: '15px', marginBottom: '10px', border: '1px solid #ddd', borderRadius: '5px' }}>
                   <h4>{event.title}</h4>
                   <p><strong>Date:</strong> {new Date(event.date).toLocaleString()}</p>
@@ -853,13 +843,12 @@ function CoordinatorDashboard() {
             setAttendanceEventId(null);
             // Refresh events list to show updated attendance status
             fetchEvents();
-          }}
-          // Prevent opening modal if attendanceCompleted
-          disabled={events.find(ev => ev._id === attendanceEventId)?.attendanceCompleted}
+          }}          // Prevent opening modal if attendanceCompleted
+          disabled={coordinatorEvents.find(ev => ev._id === attendanceEventId)?.attendanceCompleted}
         />
       )}
     </div>
   );
-}
+};
 
 export default CoordinatorDashboard;

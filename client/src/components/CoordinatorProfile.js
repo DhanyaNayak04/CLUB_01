@@ -1,24 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
-const CoordinatorProfile = ({ coordinator, onProfilePicChange }) => {
-  const apiBase = process.env.REACT_APP_API_URL || '';
-  const [profilePic, setProfilePic] = useState(
-    coordinator.profilePic
-      ? coordinator.profilePic.startsWith('http')
-        ? coordinator.profilePic
-        : apiBase + coordinator.profilePic
-      : null
-  );
-
-  useEffect(() => {
-    if (coordinator.profilePic) {
-      setProfilePic(
-        coordinator.profilePic.startsWith('http')
-          ? coordinator.profilePic
-          : apiBase + coordinator.profilePic
-      );
-    }
-  }, [coordinator.profilePic, apiBase]);
+const CoordinatorProfile = ({ coordinator }) => {
+  const [profilePic, setProfilePic] = useState(coordinator.profilePic || null);
 
   const handleProfilePicChange = (e) => {
     const file = e.target.files[0];
@@ -26,9 +9,7 @@ const CoordinatorProfile = ({ coordinator, onProfilePicChange }) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfilePic(reader.result);
-        if (onProfilePicChange) {
-          onProfilePicChange(file, reader.result);
-        }
+        // TODO: Save the new profile picture to backend/server
       };
       reader.readAsDataURL(file);
     }

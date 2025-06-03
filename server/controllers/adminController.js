@@ -2,6 +2,7 @@ const VenueRequest = require('../models/VenueRequest');
 const User = require('../models/User');
 const Club = require('../models/Club');
 const mongoose = require('mongoose');
+const { maintainVenueRequestLimit } = require('../utils/venueCleanup');
 
 // Add a try-catch wrapper function to handle async errors
 const asyncHandler = (fn) => (req, res, next) => {
@@ -70,6 +71,12 @@ exports.approveVenueRequest = asyncHandler(async (req, res) => {
     } catch (err) {
       console.log('Error updating coordinator club association:', err);
     }
+  }  // Cleanup: Keep only the 5 most recent approved venue requests
+  try {
+    await maintainVenueRequestLimit();
+  } catch (cleanupError) {
+    console.error('Error during venue request cleanup:', cleanupError);
+    // Don't fail the approval if cleanup fails
   }
   
   // Return success response
@@ -92,3 +99,27 @@ exports.rejectVenueRequest = asyncHandler(async (req, res) => {
   
   res.json({ message: 'Venue request rejected and deleted' });
 });
+
+// Utility function to clean up old approved venue requests
+// This can be called manually or scheduled to run periodically
+exports.cleanupApprovedVenueRequests = asyncHandler(async (req, res) => {
+  try {
+    const deletedCount = await maintainVenueRequestLimit();
+    
+    const remainingApproved = await VenueRequest.countDocuments({ approved: true });
+    
+    res.json({ 
+      message: `Cleanup completed. Deleted ${deletedCount} old approved venue requests.`,
+      totalApprovedRemaining: remainingApproved,
+      deletedCount
+    });
+  } catch (error) {
+    console.error('Error during venue request cleanup:', error);
+    res.status(500).json({ message: 'Error during cleanup operation' });
+  }
+});
+
+// Background utility function for automatic cleanup (no response needed)
+exports.performVenueRequestCleanup = async () => {
+  return await maintainVenueRequestLimit();
+};

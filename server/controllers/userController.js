@@ -158,21 +158,31 @@ exports.getCertificates = async (req, res) => {
 
 exports.getMyEvents = async (req, res) => {
   try {
-    // Find the user and populate their registered events
-    const user = await User.findById(req.user._id).populate('registeredEvents');
+    // Find events where the user is a participant
+    const Event = require('../models/Event');
     
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const events = await Event.find({
+      participants: req.user._id,
+      isVenueRequest: false // Only actual events, not venue requests
+    })
+      .populate('club', 'name')
+      .sort({ date: -1 }); // Sort by date descending (most recent first)
     
-    if (!user.registeredEvents || user.registeredEvents.length === 0) {
-      return res.json([]);
-    }
+    // Format events for response
+    const formattedEvents = events.map(event => ({
+      _id: event._id,
+      title: event.title,
+      description: event.description,
+      date: event.date,
+      venue: event.venue,
+      clubName: event.club?.name || 'College Club',
+      registeredAt: event.createdAt
+    }));
     
-    res.json(user.registeredEvents);
+    res.json(formattedEvents);
   } catch (error) {
     console.error('Error fetching user events:', error);
-    res.status(500).json({ message: 'Error fetching events' });
+    res.status(500).json({ message: 'Error fetching events', error: error.message });
   }
 };
 

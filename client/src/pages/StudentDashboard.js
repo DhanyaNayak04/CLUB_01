@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import api from '../api';
+import { users } from '../utils/api';
 import LogoutButton from '../components/LogoutButton';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Certificate from '../components/Certificate';
 
 function StudentDashboard() {
   const [profile, setProfile] = useState({});
-  const [events, setEvents] = useState([]);
-  const [certificates, setCertificates] = useState([]);
+  const [userEvents, setUserEvents] = useState([]);
+  const [userCertificates, setUserCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCertificate, setShowCertificate] = useState(false);
@@ -27,28 +27,24 @@ function StudentDashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Get user profile
-        const profileRes = await api.get('/api/users/me');
-        setProfile(profileRes.data);
-        
-        // Get registered events
+          // Get user profile
+        const profileRes = await users.getProfile();
+        setProfile(profileRes.data);        // Get registered events
         try {
-          const eventsRes = await api.get('/api/users/my-events');
-          setEvents(eventsRes.data);
+          const eventsRes = await users.getMyEvents();
+          setUserEvents(eventsRes.data);
         } catch (eventError) {
           console.log('Could not fetch events:', eventError);
-          setEvents([]);
+          setUserEvents([]);
         }
-        
-        // Get certificates
+          // Get certificates
         try {
-          const certRes = await api.get('/api/users/certificates');
-          setCertificates(certRes.data);
+          const certRes = await users.getMyCertificates();
+          setUserCertificates(certRes.data);
           console.log('Certificates loaded:', certRes.data);
         } catch (certError) {
           console.log('Could not fetch certificates:', certError);
-          setCertificates([]);
+          setUserCertificates([]);
         }
         
       } catch (err) {
@@ -69,18 +65,17 @@ function StudentDashboard() {
   }, [navigate]);
 
   // Separate useEffect to handle URL params after events are loaded
-  useEffect(() => {
-    // Check if we should show a certificate from URL params
+  useEffect(() => {    // Check if we should show a certificate from URL params
     const params = new URLSearchParams(location.search);
     if (params.get('certificate') === 'true') {
       const eventId = params.get('eventId');
-      const eventIndex = events.findIndex(e => e._id === eventId);
+      const eventIndex = userEvents.findIndex(e => e._id === eventId);
       
       if (eventIndex >= 0) {
-        handleViewCertificate(events[eventIndex]);
+        handleViewCertificate(userEvents[eventIndex]);
       }
     }
-  }, [location.search, events, handleViewCertificate]);
+  }, [location.search, userEvents, handleViewCertificate]);
 
   // Add effect to update preview if profile.profilePic changes
   useEffect(() => {
@@ -103,15 +98,11 @@ function StudentDashboard() {
     reader.onloadend = () => {
       setProfilePicPreview(reader.result);
     };
-    reader.readAsDataURL(file);
-
-    // Upload to backend
+    reader.readAsDataURL(file);    // Upload to backend
     try {
       const formData = new FormData();
       formData.append('profilePic', file);
-      const res = await api.post('/api/users/upload-profile-pic', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await users.uploadProfilePic(formData);
       setProfile(prev => ({ ...prev, profilePic: res.data.profilePicUrl }));
     } catch (err) {
       alert('Failed to upload profile picture');
@@ -201,13 +192,12 @@ function StudentDashboard() {
           <p style={{ margin: '5px 0 0 0' }}><b>Department:</b> {profile.department || 'Not specified'}</p>
         </div>
       </div>
-      
-      <h3>Recently Participated Events</h3>
-      {events.length === 0 ? (
+        <h3>Recently Participated Events</h3>
+      {userEvents.length === 0 ? (
         <p>You haven't participated in any events yet.</p>
       ) : (
         <ul style={{ listStyleType: 'none', padding: 0 }}>
-          {events.map((ev, index) => (
+          {userEvents.map((ev, index) => (
             <li 
               key={ev._id || index} 
               style={{ padding: '10px', marginBottom: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
@@ -219,11 +209,11 @@ function StudentDashboard() {
       )}
       
       <h3>My Certificates</h3>
-      {certificates.length === 0 ? (
+      {userCertificates.length === 0 ? (
         <p>No certificates available yet. Participate in events to earn certificates!</p>
       ) : (
         <ul style={{ listStyleType: 'none', padding: 0 }}>
-          {certificates.map((cert) => (
+          {userCertificates.map((cert) => (
             <li 
               key={cert._id}
               style={{ padding: '15px', marginBottom: '10px', border: '1px solid #ddd', borderRadius: '5px' }}
