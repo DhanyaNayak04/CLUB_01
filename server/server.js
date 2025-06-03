@@ -49,7 +49,7 @@ const mongooseOptions = {
   socketTimeoutMS: 45000,
 };
 
-const MONGODB_URI = process.env.MONGODB_URI || 
+const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 
   'mongodb+srv://dhanyanayak:Dhanya53@cluster0.imzofb9.mongodb.net/clubdb?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(MONGODB_URI, mongooseOptions)
